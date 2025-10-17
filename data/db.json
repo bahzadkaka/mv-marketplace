@@ -1,0 +1,100 @@
+{
+  "users": [
+    {
+      "id": "u_admin",
+      "role": "admin",
+      "email": "admin@local",
+      "password": "admin123",
+      "name": "Admin",
+      "status": "active"
+    },
+    {
+      "id": "u_vendor",
+      "role": "vendor",
+      "email": "vendor@local",
+      "password": "vendor123",
+      "name": "Demo Vendor",
+      "status": "active",
+      "store": {
+        "name": "Demo Vendor Store",
+        "phone": "+9647700000000",
+        "address": "Sulaimani, IQ"
+      },
+      "shipping": [
+        {
+          "name": "Standard",
+          "rate": 3.0
+        },
+        {
+          "name": "Express",
+          "rate": 6.0
+        }
+      ]
+    },
+    {
+      "id": "u_customer",
+      "role": "customer",
+      "email": "customer@local",
+      "password": "customer123",
+      "name": "Demo Customer",
+      "status": "active",
+      "addresses": [
+        {
+          "id": "addr1",
+          "label": "Home",
+          "line1": "Street 1",
+          "city": "Suli",
+          "country": "IQ",
+          "phone": "+9647711111111"
+        }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat1",
+      "name": "Composites"
+    },
+    {
+      "id": "cat2",
+      "name": "Endodontics"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "vendorId": "u_vendor",
+      "title": "Flowable Composite A2",
+      "price": 12,
+      "categoryId": "cat1",
+      "image": "",
+      "stock": 100
+    },
+    {
+      "id": "p2",
+      "vendorId": "u_vendor",
+      "title": "Gutta Percha Points #25",
+      "price": 5,
+      "categoryId": "cat2",
+      "image": "",
+      "stock": 200
+    }
+  ],
+  "banners": [
+    {
+      "id": "b1",
+      "type": "slide",
+      "image": "/uploads/sample-slide.jpg",
+      "position": "home-top",
+      "url": "#"
+    },
+    {
+      "id": "b2",
+      "type": "banner",
+      "image": "/uploads/sample-banner.jpg",
+      "position": "home-mid",
+      "url": "#"
+    }
+  ],
+  "orders": []
+}
