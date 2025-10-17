@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Customer Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root{ --brand:#6a4dff; }
+  *{ box-sizing:border-box; font-family:Inter, system-ui, Arial; }
+  body{ margin:0; background:#f6f7fb; color:#111827; }
+  header{ position:sticky; top:0; background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 14px; display:flex; gap:10px; align-items:center; }
+  .h1{ font-weight:800; color:var(--brand); }
+  main{ padding:16px; display:grid; gap:16px; }
+  .card{ background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; }
+  input, select, button{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; }
+  button.primary{ background:var(--brand); color:#fff; border:0; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; }
+  th, td{ padding:8px; border-bottom:1px solid #e5e7eb; text-align:left; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="h1">Customer</div>
+  <div style="margin-left:auto"></div>
+  <button onclick="loginDemo()">Login demo</button>
+  <a href="/index.html">🏠 Store</a>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <input id="email" placeholder="email" value="customer@local"/>
+      <input id="password" type="password" placeholder="password" value="customer123"/>
+      <button class="primary" onclick="login()">Login</button>
+      <span id="me"></span>
+    </div>
+  </div>
+
+  <div class="card" id="profileCard" style="display:none">
+    <h3>Your Info</h3>
+    <div class="row">
+      <input id="name" placeholder="Name"/>
+      <input id="phone" placeholder="Phone"/>
+      <button onclick="saveProfile()">Save</button>
+    </div>
+    <h4>Addresses</h4>
+    <div class="row">
+      <input id="addrLabel" placeholder="Label"/>
+      <input id="addrLine1" placeholder="Line 1"/>
+      <input id="addrCity" placeholder="City"/>
+      <input id="addrCountry" placeholder="Country"/>
+      <input id="addrPhone" placeholder="Phone"/>
+      <button onclick="addAddress()">Add</button>
+    </div>
+    <div id="addresses"></div>
+  </div>
+
+  <div class="card">
+    <h3>Cart</h3>
+    <div id="cart"></div>
+    <div class="row">
+      <label>Ship To:</label>
+      <select id="addressSel"></select>
+      <button class="primary" onclick="checkout()">Place Order</button>
+    </div>
+    <div id="shipNote" style="font-size:12px;color:#6b7280">Shipping is calculated per vendor and summed on the invoice.</div>
+  </div>
+
+  <div class="card">
+    <h3>My Orders</h3>
+    <div id="orders"></div>
+  </div>
+</main>
+<script>
+let token = localStorage.getItem('custToken')||'';
+function setToken(t){ token=t; localStorage.setItem('custToken', t); }
+function auth(){ return token? {'Authorization':'Bearer '+token} : {}; }
+function loginDemo(){ document.getElementById('email').value='customer@local'; document.getElementById('password').value='customer123'; }
+
+async function login(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const res = await fetch('/api/auth/login',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password})});
+  const data = await res.json();
+  if(data.token){ setToken(data.token); me(); } else alert(JSON.stringify(data));
+}
+async function me(){
+  const res = await fetch('/api/customer/me',{headers:auth()});
+  if(res.status!==200){ document.getElementById('me').textContent=''; document.getElementById('profileCard').style.display='none'; return; }
+  const u = await res.json();
+  document.getElementById('me').textContent = `Logged in as ${u.email}`;
+  document.getElementById('profileCard').style.display='block';
+  document.getElementById('name').value = u.name||'';
+  document.getElementById('phone').value = u.phone||'';
+  renderAddresses(u.addresses||[]);
+  renderAddressSelect(u.addresses||[]);
+  renderOrders();
+}
+async function saveProfile(){
+  const name = document.getElementById('name').value;
+  const phone = document.getElementById('phone').value;
+  await fetch('/api/customer/me',{method:'PUT', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({name, phone})});
+  me();
+}
+async function addAddress(){
+  const a = { label:addrLabel.value, line1:addrLine1.value, city:addrCity.value, country:addrCountry.value, phone:addrPhone.value };
+  await fetch('/api/customer/address',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify(a)});
+  addrLabel.value=addrLine1.value=addrCity.value=addrCountry.value=addrPhone.value='';
+  me();
+}
+function renderAddresses(addrs){
+  addresses.innerHTML = addrs.map(a=>`<div class='row'>
+    <div><b>${a.label}</b> — ${a.line1}, ${a.city}, ${a.country} (${a.phone})</div>
+    <button onclick='delAddr("${a.id}")'>Delete</button>
+  </div>`).join('');
+}
+async function delAddr(id){
+  await fetch('/api/customer/address/'+id,{method:'DELETE', headers:auth()});
+  me();
+}
+function getCart(){ return JSON.parse(localStorage.getItem('cart')||'[]'); }
+function setCart(c){ localStorage.setItem('cart', JSON.stringify(c)); renderCart(); }
+
+async function renderCart(){
+  const cart = getCart(); if(cart.length===0){ cartDiv.innerHTML='<i>Cart is empty.</i>'; return; }
+}
+function renderCart(){
+  const cart = getCart();
+  const rows = cart.map((x,i)=>`<tr>
+    <td>${x.productId}</td><td>$${x.price}</td>
+    <td><input type='number' min='1' value='${x.qty}' onchange='changeQty(${i}, this.value)'></td>
+    <td>$${(x.price*x.qty).toFixed(2)}</td>
+    <td><button onclick='removeItem(${i})'>X</button></td>
+  </tr>`).join('');
+  const total = cart.reduce((a,x)=>a+x.price*x.qty,0);
+  document.getElementById('cart').innerHTML = `
+    <table>
+      <tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th><th></th></tr>
+      ${rows}
+      <tr><td colspan="3"><b>Total (items)</b></td><td colspan="2"><b>$${total.toFixed(2)}</b></td></tr>
+    </table>`;
+}
+function changeQty(i,v){ const c=getCart(); c[i].qty=+v; setCart(c); }
+function removeItem(i){ const c=getCart(); c.splice(i,1); setCart(c); }
+
+function renderAddressSelect(addrs){
+  addressSel.innerHTML = addrs.map(a=>`<option value="${a.id}">${a.label} — ${a.city}</option>`).join('');
+}
+
+async function checkout(){
+  const cart = getCart(); if(cart.length===0) return alert('Cart is empty');
+  const addressId = addressSel.value;
+  // Build vendor shipping choices: default "Standard" (server will pick first if not provided)
+  const shippingChoices = Object.values(cart.reduce((acc, it)=>{ acc[it.vendorId]= {vendorId:it.vendorId, methodName:'Standard'}; return acc; }, {}));
+  const res = await fetch('/api/customer/orders', {
+    method:'POST', headers:{'Content-Type':'application/json', ...auth()},
+    body: JSON.stringify({ items: cart.map(x=>({productId:x.productId, qty:x.qty})), addressId, shippingChoices })
+  });
+  const data = await res.json();
+  if(data.id){
+    localStorage.removeItem('cart');
+    alert('Order placed! Invoice will open.');
+    window.open('/api/orders/'+data.id+'/invoice.pdf','_blank');
+    renderOrders();
+    document.getElementById('cart').innerHTML='';
+  }else{
+    alert(JSON.stringify(data));
+  }
+}
+
+async function renderOrders(){
+  const res = await fetch('/api/customer/orders',{headers:auth()}); if(res.status!==200) return;
+  const list = await res.json();
+  orders.innerHTML = list.map(o=>`
+    <div class="card">
+      <div><b>Order #${o.id}</b> • ${new Date(o.createdAt).toLocaleString()} • <b>${o.status}</b></div>
+      <div>Items: ${o.items.length} • Shipping: $${o.shipping.total} • <b>Total: $${o.total}</b></div>
+      <a target="_blank" href="/api/orders/${o.id}/invoice.pdf">Download Invoice PDF</a>
+    </div>
+  `).join('');
+}
+
+me(); renderCart();
+</script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Admin Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root{ --brand:#6a4dff; }
+  *{ box-sizing:border-box; font-family:Inter, system-ui, Arial; }
+  body{ margin:0; background:#f6f7fb; color:#111827; }
+  header{ position:sticky; top:0; background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 14px; display:flex; gap:10px; align-items:center; }
+  .h1{ font-weight:800; color:var(--brand); }
+  main{ padding:16px; display:grid; gap:16px; }
+  .card{ background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; }
+  input, select, button{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; }
+  button.primary{ background:var(--brand); color:#fff; border:0; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; }
+  th, td{ padding:8px; border-bottom:1px solid #e5e7eb; text-align:left; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="h1">Admin</div>
+  <div style="margin-left:auto"></div>
+  <button onclick="loginDemo()">Login demo</button>
+  <a href="/index.html">🏠 Store</a>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <input id="email" placeholder="email" value="admin@local"/>
+      <input id="password" type="password" placeholder="password" value="admin123"/>
+      <button class="primary" onclick="login()">Login</button>
+      <span id="me"></span>
+    </div>
+  </div>
+
+  <div class="card" id="usersCard" style="display:none">
+    <h3>Users</h3>
+    <table id="utable"></table>
+  </div>
+
+  <div class="card" id="catCard" style="display:none">
+    <h3>Categories</h3>
+    <div class="row">
+      <input id="cname" placeholder="New category name"/>
+      <button onclick="addCat()">Add</button>
+    </div>
+    <table id="ctable"></table>
+  </div>
+
+  <div class="card" id="bannerCard" style="display:none">
+    <h3>Banners / Slides</h3>
+    <div class="row">
+      <select id="btype">
+        <option value="slide">Slide</option>
+        <option value="banner">Banner</option>
+      </select>
+      <input id="bpos" placeholder="Position (home-top, home-mid)"/>
+      <input id="burl" placeholder="URL"/>
+      <input id="bimg" placeholder="Image URL (or use upload in API)"/>
+      <button onclick="addBanner()">Add</button>
+    </div>
+    <table id="btable"></table>
+  </div>
+
+  <div class="card" id="ordersCard" style="display:none">
+    <h3>Orders</h3>
+    <table id="otable"></table>
+  </div>
+
+  <div class="card" id="backupCard" style="display:none">
+    <h3>Backup / Import</h3>
+    <div class="row">
+      <a id="bk" class="primary" href="#">Download backup JSON</a>
+      <input id="imp" type="file" />
+      <button onclick="doImport()">Import</button>
+    </div>
+  </div>
+
+</main>
+<script>
+let token = localStorage.getItem('admToken')||'';
+function setToken(t){ token=t; localStorage.setItem('admToken', t); }
+function auth(){ return token? {'Authorization':'Bearer '+token} : {}; }
+function loginDemo(){ email.value='admin@local'; password.value='admin123'; }
+
+async function login(){
+  const res = await fetch('/api/auth/login',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email.value, password:password.value})});
+  const data = await res.json();
+  if(data.token){ setToken(data.token); me(); } else alert(JSON.stringify(data));
+}
+async function me(){
+  try{
+    const ures = await fetch('/api/admin/users',{headers:auth()});
+    if(ures.status!==200){ show(false); return; }
+    show(true);
+    renderUsers(await ures.json());
+    const cres = await fetch('/api/admin/categories',{headers:auth()});
+    renderCats(await cres.json());
+    const bres = await fetch('/api/admin/banners',{headers:auth()});
+    renderBanners(await bres.json());
+    const ores = await fetch('/api/admin/orders',{headers:auth()});
+    renderOrders(await ores.json());
+    document.getElementById('bk').href = '/api/admin/backup';
+  }catch(e){ show(false); }
+}
+function show(ok){
+  document.getElementById('usersCard').style.display = ok?'block':'none';
+  document.getElementById('catCard').style.display = ok?'block':'none';
+  document.getElementById('bannerCard').style.display = ok?'block':'none';
+  document.getElementById('ordersCard').style.display = ok?'block':'none';
+  document.getElementById('backupCard').style.display = ok?'block':'none';
+  meSpan.textContent = ok ? 'Logged in' : '';
+}
+function renderUsers(list){
+  utable.innerHTML = `<tr><th>Email</th><th>Role</th><th>Status</th><th>Name</th><th>Action</th></tr>` + 
+  list.map(u=>`<tr>
+    <td>${u.email}</td><td>${u.role}</td><td>${u.status}</td><td>${u.name||''}</td>
+    <td>
+      <button onclick='setStatus("${u.id}","active")'>Approve</button>
+      <button onclick='setStatus("${u.id}","blocked")'>Block</button>
+      <button onclick='delUser("${u.id}")'>Delete</button>
+    </td>
+  </tr>`).join('');
+}
+async function setStatus(id, status){
+  await fetch('/api/admin/users/'+id+'/status',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({status})});
+  me();
+}
+async function delUser(id){
+  await fetch('/api/admin/users/'+id,{method:'DELETE', headers:auth()});
+  me();
+}
+
+function renderCats(list){
+  ctable.innerHTML = `<tr><th>Name</th><th>ID</th><th></th></tr>` + 
+  list.map(c=>`<tr>
+    <td>${c.name}</td><td>${c.id}</td>
+    <td><button onclick='delCat("${c.id}")'>Delete</button></td>
+  </tr>`).join('');
+}
+async function addCat(){
+  await fetch('/api/admin/categories',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({name:cname.value})});
+  cname.value=''; me();
+}
+async function delCat(id){
+  await fetch('/api/admin/categories/'+id,{method:'DELETE', headers:auth()});
+  me();
+}
+
+function renderBanners(list){
+  btable.innerHTML = `<tr><th>Type</th><th>Pos</th><th>Image</th><th>URL</th><th>ID</th><th></th></tr>` + 
+  list.map(b=>`<tr>
+    <td>${b.type}</td><td>${b.position}</td><td><img src="${b.image}" width="80"></td><td>${b.url}</td><td>${b.id}</td>
+    <td><button onclick='delBanner("${b.id}")'>Delete</button></td>
+  </tr>`).join('');
+}
+async function addBanner(){
+  await fetch('/api/admin/banners',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, 
+    body:JSON.stringify({type:btype.value, position:bpos.value, url:burl.value, image:bimg.value})});
+  bpos.value=burl.value=bimg.value=''; me();
+}
+async function delBanner(id){
+  await fetch('/api/admin/banners/'+id,{method:'DELETE', headers:auth()});
+  me();
+}
+
+function renderOrders(list){
+  otable.innerHTML = `<tr><th>ID</th><th>Date</th><th>Status</th><th>Items</th><th>Total</th><th></th></tr>` + 
+  list.map(o=>`<tr>
+    <td>${o.id}</td><td>${new Date(o.createdAt).toLocaleString()}</td><td>${o.status}</td><td>${o.items.length}</td><td>$${o.total}</td>
+    <td>
+      <button onclick='setOrder("${o.id}","paid")'>Mark paid</button>
+      <a href="/api/orders/${o.id}/invoice.pdf" target="_blank">PDF</a>
+    </td>
+  </tr>`).join('');
+}
+async function setOrder(id, status){
+  await fetch('/api/admin/orders/'+id+'/status',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({status})});
+  me();
+}
+
+async function doImport(){
+  const f = imp.files[0]; if(!f) return alert('Choose a file');
+  const fd = new FormData(); fd.append('file', f);
+  const res = await fetch('/api/admin/import',{method:'POST', headers:{...auth()}, body: fd});
+  if(res.status===200) alert('Imported!'); else alert('Import failed');
+  me();
+}
+
+me();
+</script>
+</body>
+</html>

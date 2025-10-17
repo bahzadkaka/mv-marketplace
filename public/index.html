@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketplace — Home</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    :root { --brand:#6a4dff; --ink:#16181b; --muted:#6b7280; --card:#ffffff; --bg:#f5f7fb; }
+    *{ box-sizing:border-box; font-family:Inter, system-ui, -apple-system, Segoe UI, Arial, sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--ink); }
+    header{ position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center; background:#fff; border-bottom:1px solid #e5e7eb; padding:12px 16px; }
+    .brand{ font-weight:800; color:var(--brand); }
+    .pill{ margin-left:auto; padding:6px 10px; border-radius:999px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; }
+    main{ padding:16px; display:grid; gap:20px; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap:14px; }
+    .card{ background:var(--card); border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+    .card img{ width:100%; height:140px; object-fit:cover; background:#eef2ff; }
+    .card .p{ padding:10px; display:grid; gap:6px; }
+    .price{ font-weight:800; }
+    .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    select, button, input{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
+    button.primary{ background:var(--brand); color:#fff; border:0; }
+    .cartbar{ position:fixed; right:16px; bottom:16px; padding:10px 14px; border-radius:999px; background:var(--brand); color:#fff; font-weight:700; }
+    .banner{ width:100%; border-radius:12px; overflow:hidden; }
+    .banner img{ width:100%; display:block; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">BA Marketplace</div>
+  <a class="pill" href="/customer.html">Customer</a>
+  <a class="pill" href="/vendor.html">Vendor</a>
+  <a class="pill" href="/admin.html">Admin</a>
+</header>
+<main>
+  <div id="slides"></div>
+  <div class="toolbar">
+    <label>Category:</label>
+    <select id="cat"></select>
+    <input id="search" placeholder="Search products..." />
+  </div>
+  <div id="grid" class="grid"></div>
+</main>
+<a class="cartbar" href="/customer.html#cart">🛒 View Cart (<span id="cartCount">0</span>)</a>
+<script>
+const grid = document.getElementById('grid');
+const catSel = document.getElementById('cat');
+const cartCount = document.getElementById('cartCount');
+const search = document.getElementById('search');
+
+function getCart(){ return JSON.parse(localStorage.getItem('cart')||'[]'); }
+function setCart(c){ localStorage.setItem('cart', JSON.stringify(c)); cartCount.textContent = c.reduce((a,x)=>a+x.qty,0); }
+setCart(getCart());
+
+async function load(){
+  const res = await fetch('/api/store/home'); const data = await res.json();
+  catSel.innerHTML = '<option value="">All</option>' + data.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('slides').innerHTML = data.banners.map(b=>`<div class="banner"><a href="${b.url}"><img src="${b.image}"></a></div>`).join('');
+  render(data.products);
+}
+load();
+
+function render(products){
+  const q = (search.value||'').toLowerCase();
+  const filter = products.filter(p => (!catSel.value || p.categoryId===catSel.value) && (!q || p.title.toLowerCase().includes(q)));
+  grid.innerHTML = filter.map(p=>`
+  <div class="card">
+    <img src="${p.image||'https://placehold.co/600x400?text=Product'}">
+    <div class="p">
+      <div>${p.title}</div>
+      <div class="price">$${p.price}</div>
+      <button class="primary" onclick='addToCart("${p.id}", ${p.price}, "${p.vendorId}")'>Add to cart</button>
+    </div>
+  </div>`).join('');
+}
+catSel.onchange = ()=>load().then(()=>{});
+search.oninput = ()=>load().then(()=>{});
+
+function addToCart(productId, price, vendorId){
+  const cart = getCart();
+  const i = cart.findIndex(x=>x.productId===productId);
+  if(i>=0) cart[i].qty += 1; else cart.push({productId, price, vendorId, qty:1});
+  setCart(cart);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Vendor Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root{ --brand:#6a4dff; }
+  *{ box-sizing:border-box; font-family:Inter, system-ui, Arial; }
+  body{ margin:0; background:#f6f7fb; color:#111827; }
+  header{ position:sticky; top:0; background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 14px; display:flex; gap:10px; align-items:center; }
+  .h1{ font-weight:800; color:var(--brand); }
+  main{ padding:16px; display:grid; gap:16px; }
+  .card{ background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; }
+  input, select, button{ padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; }
+  button.primary{ background:var(--brand); color:#fff; border:0; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; }
+  th, td{ padding:8px; border-bottom:1px solid #e5e7eb; text-align:left; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="h1">Vendor</div>
+  <div style="margin-left:auto"></div>
+  <button onclick="loginDemo()">Login demo</button>
+  <a href="/index.html">🏠 Store</a>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <input id="email" placeholder="email" value="vendor@local"/>
+      <input id="password" type="password" placeholder="password" value="vendor123"/>
+      <button class="primary" onclick="login()">Login</button>
+      <span id="me"></span>
+    </div>
+  </div>
+
+  <div class="card" id="storeCard" style="display:none">
+    <h3>Store Profile</h3>
+    <div class="row">
+      <input id="sname" placeholder="Store name"/>
+      <input id="sphone" placeholder="Phone"/>
+      <input id="saddr" placeholder="Address"/>
+      <button onclick="saveStore()">Save</button>
+    </div>
+    <h4>Shipping Methods</h4>
+    <div class="row">
+      <input id="shipName" placeholder="Method name" />
+      <input id="shipRate" placeholder="Rate" type="number" step="0.01"/>
+      <button onclick="addShip()">Add</button>
+    </div>
+    <div id="ships"></div>
+  </div>
+
+  <div class="card" id="prodCard" style="display:none">
+    <h3>Products</h3>
+    <div class="row">
+      <input id="ptitle" placeholder="Title"/>
+      <input id="pprice" placeholder="Price" type="number" step="0.01"/>
+      <input id="pcat" placeholder="Category ID (e.g. cat1)"/>
+      <input id="pstock" placeholder="Stock" type="number" />
+      <input id="pimg" placeholder="Image URL (optional)"/>
+      <button class="primary" onclick="addProduct()">Add</button>
+    </div>
+    <table id="ptable"></table>
+  </div>
+</main>
+<script>
+let token = localStorage.getItem('vendToken')||'';
+let vendorData = null;
+function setToken(t){ token=t; localStorage.setItem('vendToken', t); }
+function auth(){ return token? {'Authorization':'Bearer '+token} : {}; }
+function loginDemo(){ email.value='vendor@local'; password.value='vendor123'; }
+
+async function login(){
+  const res = await fetch('/api/auth/login',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email.value, password:password.value})});
+  const data = await res.json();
+  if(data.token){ setToken(data.token); me(); } else alert(JSON.stringify(data));
+}
+async function me(){
+  const res = await fetch('/api/vendor/me',{headers:auth()});
+  if(res.status!==200){ document.getElementById('storeCard').style.display='none'; document.getElementById('prodCard').style.display='none'; return; }
+  vendorData = await res.json();
+  meSpan.textContent = `Logged in as ${vendorData.email}`;
+  sname.value = vendorData.store?.name||'';
+  sphone.value = vendorData.store?.phone||'';
+  saddr.value = vendorData.store?.address||'';
+  renderShips(vendorData.shipping||[]);
+  document.getElementById('storeCard').style.display='block';
+  document.getElementById('prodCard').style.display='block';
+  renderProducts();
+}
+async function saveStore(){
+  const body = { store:{ name:sname.value, phone:sphone.value, address:saddr.value }, shipping: vendorData.shipping||[] };
+  await fetch('/api/vendor/me',{method:'PUT', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify(body)});
+  me();
+}
+function renderShips(arr){
+  ships.innerHTML = arr.map((s,i)=>`<div class='row'>${s.name} — $${s.rate} <button onclick='delShip(${i})'>Delete</button></div>`).join('');
+}
+async function addShip(){
+  vendorData.shipping = vendorData.shipping || [];
+  vendorData.shipping.push({name: shipName.value, rate: +shipRate.value});
+  shipName.value=''; shipRate.value='';
+  await fetch('/api/vendor/me',{method:'PUT', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({shipping:vendorData.shipping})});
+  me();
+}
+async function delShip(i){
+  vendorData.shipping.splice(i,1);
+  await fetch('/api/vendor/me',{method:'PUT', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify({shipping:vendorData.shipping})});
+  me();
+}
+async function renderProducts(){
+  const res = await fetch('/api/vendor/products',{headers:auth()}); const list = await res.json();
+  ptable.innerHTML = `<tr><th>Title</th><th>Price</th><th>Cat</th><th>Stock</th><th></th></tr>` + 
+    list.map(p=>`<tr>
+      <td>${p.title}</td><td>$${p.price}</td><td>${p.categoryId}</td><td>${p.stock}</td>
+      <td><button onclick='delProd("${p.id}")'>Delete</button></td>
+    </tr>`).join('');
+}
+async function addProduct(){
+  const body = { title: ptitle.value, price:+pprice.value, categoryId: pcat.value, stock:+pstock.value, image:pimg.value };
+  await fetch('/api/vendor/products',{method:'POST', headers:{'Content-Type':'application/json',...auth()}, body:JSON.stringify(body)});
+  ptitle.value=pprice.value=pcat.value=pstock.value=pimg.value='';
+  renderProducts();
+}
+async function delProd(id){
+  await fetch('/api/vendor/products/'+id,{method:'DELETE', headers:auth()});
+  renderProducts();
+}
+me();
+</script>
+</body>
+</html>
